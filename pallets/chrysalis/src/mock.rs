@@ -2,14 +2,17 @@ use crate::{self as pallet_chrysalis, Config};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, Everything},
+	traits::tokens::currency::ReservableCurrency, // FIX: Added ReservableCurrency
 };
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, // Import BuildStorage
+	BuildStorage,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
+// FIX: Mock Balance type, needed for the new Balance generic constraint
+pub type Balance = u64; 
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -21,7 +24,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-// FIX: This is the new, complete implementation for frame_system::Config
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
@@ -29,8 +31,8 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Nonce = u64; // Was missing
-	type Block = Block; // Was missing
+	type Nonce = u64;
+	type Block = Block;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -46,18 +48,18 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
-	type RuntimeTask = (); // Was missing
-	type ExtensionsWeightInfo = (); // Was missing
-	type SingleBlockMigrations = (); // Was missing
-	type MultiBlockMigrator = (); // Was missing
-	type PreInherents = (); // Was missing
-	type PostInherents = (); // Was missing
-	type PostTransactions = (); // Was missing
+	type RuntimeTask = ();
+	type ExtensionsWeightInfo = ();
+	type SingleBlockMigrations = ();
+	type MultiBlockMigrator = ();
+	type PreInherents = ();
+	type PostInherents = ();
+	type PostTransactions = ();
 }
 
-// FIX: This is the new, complete implementation for pallet_balances::Config
 impl pallet_balances::Config for Test {
-	type Balance = u64;
+	// FIX: Use the mock Balance type
+	type Balance = Balance; 
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
@@ -66,11 +68,11 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
-	type RuntimeHoldReason = (); // Was missing
-	type RuntimeFreezeReason = (); // Was missing
-	type FreezeIdentifier = (); // Was missing
-	type MaxFreezes = ConstU32<10>; // Was missing
-	type DoneSlashHandler = (); // Was missing
+	type RuntimeHoldReason = ();
+	type RuntimeFreezeReason = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ConstU32<10>;
+	type DoneSlashHandler = ();
 }
 
 parameter_types! {
@@ -82,6 +84,9 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TreeDepth = TreeDepth;
 	type DefaultLeafHash = DefaultLeafHash;
+	// FIX: Implement Currency and Balance for the Pallet Config
+	type Currency = Balances; 
+	type Balance = Balance; 
 }
 
 // Build genesis storage according to the mock runtime.

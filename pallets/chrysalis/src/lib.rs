@@ -5,12 +5,19 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::{Decode, *};
+	use frame_support::{
+    pallet_prelude::*,
+    traits::ReservableCurrency, // ✅ Required
+};
 	use frame_system::pallet_prelude::*;
-	use sp_std::vec::Vec;
 	
+	use sp_runtime::traits::{
+    AtLeast32BitUnsigned,       // ✅ Required
+    // other traits you already had
+};
 	use core::str::FromStr;
 	use hex;
+	
 
 	// --- Arkworks Runtime Imports (v0.4.0 API) ---
 	use ark_bls12_381::{Bls12_381, Fr};
@@ -19,7 +26,9 @@ pub mod pallet {
 	use ark_serialize::CanonicalDeserialize;
 	use ark_snark::SNARK;
 	use ark_sponge::{poseidon::{PoseidonConfig, PoseidonSponge}, CryptographicSponge};
-
+	// In lib.rs, near the top of the file:
+	use sp_std::vec::Vec;
+	// --- END Arkworks Imports ---
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
@@ -40,7 +49,15 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nullifiers)]
 	pub type Nullifiers<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, (), OptionQuery>;
-
+	#[pallet::storage]
+	#[pallet::getter(fn is_relayer_registered)] // Added getter for convenience
+	pub(super) type Relayers<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		bool, // true if registered, false if not (or just check existence)
+		ValueQuery,
+	>;
 	// --- Config ---
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -49,6 +66,11 @@ pub mod pallet {
 		type TreeDepth: Get<u8>;
 		#[pallet::constant]
 		type DefaultLeafHash: Get<Self::Hash>;
+		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::Balance>;
+    
+		// New: The balance type used for fees
+		type Balance: Parameter + Member + Copy + MaybeSerializeDeserialize +
+			MaxEncodedLen + AtLeast32BitUnsigned + Default;
 	}
 
 	// --- Events ---
@@ -57,7 +79,14 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		NoteDeposited { depositor: T::AccountId, leaf_index: u32, commitment: T::Hash },
 		TransferSuccessful { who: T::AccountId },
+		WithdrawalSuccessful {
+        recipient: T::AccountId,
+        relayer: T::AccountId,
+        fee: T::Balance,
+    },
 	}
+	
+
 
 	// --- Errors ---
 	#[pallet::error]
@@ -65,7 +94,11 @@ pub mod pallet {
 		TreeFull,
 		InvalidProof,
 		NullifierAlreadyUsed,
+		InvalidRelayer, // New: The caller is not a registered relayer.
+		FeeTooLow,      // New: The relayer fee specified is insufficient.
+		FeeTransferFailed,
 	}
+	
 
 	// --- Extrinsics ---
 	#[pallet::call]
@@ -113,6 +146,41 @@ pub mod pallet {
 			Self::deposit_event(Event::TransferSuccessful { who });
 			Ok(())
 		}
+		#[pallet::call_index(2)] // New call index
+		#[pallet::weight(Weight::from_parts(1_500_000_000, 0) + T::DbWeight::get().writes(5))]
+		pub fn unshield(
+			origin: OriginFor<T>,
+			proof_bytes: Vec<u8>,
+			merkle_root: T::Hash,
+			nullifiers: [T::Hash; 2],
+			output_commitments: [T::Hash; 2],
+			// New Parameters for Relayer Logic:
+			relayer_address: T::AccountId, // The account that submitted the transaction (and gets the fee)
+			recipient_address: T::AccountId, // The final destination of the unshielded funds
+			fee: T::Balance, // The fee amount paid by the sender (must be >= minimum required)
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// PLACEHOLDER LOGIC: Check if the submitter (who) is a registered relayer.
+			// In a real system, the submitter (who) is the relayer_address, and we check if 'who' is registered.
+			ensure!(Self::is_relayer_registered(&who), Error::<T>::InvalidRelayer);
+
+			// Placeholder: Check if fee is sufficient (assuming minimum required fee is 100 for now)
+			let min_fee: T::Balance = 100u32.into();
+			ensure!(fee >= min_fee, Error::<T>::FeeTooLow);
+			
+			// Placeholder: Verification and fund distribution logic will go here later.
+			// We expect verification to pass and funds to be moved/created here.
+
+			// Success Metric: Just compile for now.
+			Self::deposit_event(Event::WithdrawalSuccessful {
+				recipient: recipient_address,
+				relayer: who,
+				fee,
+			});
+
+			Ok(())
+		}
 	}
 
 	// --- Internal Logic ---
@@ -135,7 +203,16 @@ fn get_poseidon_params() -> PoseidonConfig<Fr> {
         ["0x070986505c54b6ced532b3d5690a5334ff749dbb52a044d18a40eeff3d98d575", "0x5104e34117bbc8477499413a1f1a87db8c4f012fee9d235e5fc1c0630392de58", "0x1e37753ba47b1ebfa0092b7df764e08f108e64ac41e676feef681dde99021f74"],
         ["0x2816937124301227d2ef8b4e94ee4b9c36200a679955b3c735c5d711cd83fcd8", "0x571cd1934a1790bd418de7779ad6a411bf32b63af280c96e4c00f5de2c6346be", "0x1de524140b3910478e94e5e9473fac15a3142a61de52c6e183f8e9e1fbfd5a37"]
     ];
-
+	let mds: Vec<Vec<Fr>> = mds_str.iter().map(|row| {
+        row.iter().map(|&s| {
+            let s_no_prefix = s.trim_start_matches("0x");
+            let mut bytes_be = hex::decode(s_no_prefix).expect("Invalid hex for MDS");
+            bytes_be.reverse();
+            let mut bytes_le = [0u8; 32];
+            bytes_le[..bytes_be.len().min(32)].copy_from_slice(&bytes_be);
+            Fr::from_le_bytes_mod_order(&bytes_le)
+        }).collect()
+    }).collect();
     // The flat list of 117 Round Constants (ark) from your output
     let ark_flat_str: [&str; 117] = [
     "0x3bf3daa9937bba3af988c39db9ecb39ad07f04f3c5fbcc30742fa957aeaeb330",
