@@ -5,36 +5,33 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	// --- Substrate Imports ---
 	use frame_support::{
-    pallet_prelude::*,
-    traits::ReservableCurrency, // ✅ Required
-};
+		pallet_prelude::{Decode, *},
+		traits::{Currency, ExistenceRequirement, ReservableCurrency}, PalletId,
+	};
 	use frame_system::pallet_prelude::*;
+	use sp_std::vec; // Use sp_std::vec for no_std
+	use sp_std::vec::Vec;
 	
-	use sp_runtime::traits::{
-    AtLeast32BitUnsigned,       // ✅ Required
-    // other traits you already had
-};
-	use core::str::FromStr;
-	use hex;
-	
+	use core::str::FromStr; // For parsing constants
+	use hex; // For parsing constants
+    use sp_runtime::traits::{
+        AccountIdConversion, AtLeast32BitUnsigned, Member, MaybeSerializeDeserialize, CheckedSub
+    };
 
-	// --- Arkworks Runtime Imports (v0.4.0 API) ---
+	// --- Arkworks Imports ---
 	use ark_bls12_381::{Bls12_381, Fr};
 	use ark_ff::{BigInteger, PrimeField, Zero};
 	use ark_groth16::{Groth16, Proof, VerifyingKey};
 	use ark_serialize::CanonicalDeserialize;
 	use ark_snark::SNARK;
-	use ark_sponge::{poseidon::{PoseidonConfig, PoseidonSponge}, CryptographicSponge};
-	// In lib.rs, near the top of the file:
-	use sp_std::vec::Vec;
-	// --- END Arkworks Imports ---
+	use ark_sponge::{poseidon::{PoseidonConfig, PoseidonSponge}, CryptographicSponge};// --- END Arkworks Imports ---
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
 	// --- PASTE YOUR VERIFYING KEY BYTES HERE ---
-	pub const VERIFYING_KEY: &[u8] = &[6, 2, 225, 150, 226, 28, 4, 8, 184, 78, 64, 24, 87, 210, 162, 239, 13, 34, 189, 61, 87, 8, 90, 73, 6, 51, 84, 72, 223, 27, 95, 188, 183, 43, 214, 183, 87, 162, 28, 133, 228, 14, 153, 252, 216, 128, 167, 102, 9, 63, 103, 3, 29, 153, 169, 132, 79, 202, 118, 211, 75, 174, 218, 29, 141, 2, 58, 57, 129, 255, 129, 5, 93, 211, 213, 151, 142, 4, 56, 108, 124, 37, 255, 185, 94, 128, 219, 154, 10, 87, 111, 11, 144, 240, 164, 238, 14, 253, 135, 8, 41, 115, 55, 149, 25, 60, 115, 134, 217, 115, 47, 1, 71, 130, 112, 165, 1, 66, 25, 15, 36, 5, 86, 246, 72, 68, 6, 17, 90, 62, 69, 220, 205, 159, 179, 16, 100, 212, 46, 121, 207, 185, 235, 190, 2, 14, 211, 251, 32, 203, 51, 101, 236, 48, 113, 237, 134, 76, 126, 197, 31, 47, 84, 166, 22, 56, 77, 87, 100, 104, 126, 195, 139, 177, 174, 85, 80, 168, 84, 104, 32, 33, 140, 135, 69, 166, 172, 88, 206, 102, 206, 26, 12, 238, 54, 47, 131, 31, 110, 67, 28, 161, 93, 243, 30, 30, 234, 47, 109, 151, 121, 142, 8, 242, 118, 234, 182, 127, 92, 92, 110, 199, 109, 28, 127, 26, 229, 48, 214, 234, 27, 202, 68, 164, 88, 42, 2, 174, 177, 81, 0, 90, 220, 136, 148, 30, 20, 6, 232, 174, 222, 188, 134, 207, 140, 170, 187, 41, 32, 139, 30, 105, 71, 182, 229, 180, 192, 84, 221, 50, 74, 21, 108, 244, 70, 6, 95, 250, 66, 188, 212, 123, 158, 123, 137, 243, 24, 117, 13, 41, 133, 238, 127, 239, 169, 116, 6, 201, 90, 186, 230, 19, 204, 252, 42, 72, 193, 128, 90, 137, 27, 254, 85, 248, 90, 163, 171, 48, 48, 243, 130, 155, 116, 121, 163, 182, 56, 117, 30, 185, 50, 112, 176, 118, 245, 227, 12, 134, 123, 210, 233, 237, 183, 170, 148, 183, 27, 174, 23, 52, 20, 128, 199, 51, 121, 76, 133, 232, 225, 96, 108, 52, 46, 230, 125, 19, 23, 19, 141, 133, 40, 156, 174, 144, 151, 234, 69, 56, 250, 230, 50, 226, 61, 139, 7, 205, 169, 96, 179, 146, 96, 51, 117, 135, 137, 132, 85, 250, 69, 27, 153, 143, 116, 55, 151, 171, 163, 81, 160, 23, 160, 116, 62, 241, 137, 131, 39, 135, 132, 206, 149, 29, 133, 220, 187, 175, 88, 189, 41, 52, 188, 51, 16, 190, 44, 31, 196, 247, 139, 96, 22, 133, 24, 216, 123, 242, 255, 206, 215, 98, 151, 178, 73, 105, 43, 51, 240, 145, 44, 235, 49, 39, 71, 108, 195, 168, 167, 163, 231, 68, 216, 40, 32, 196, 232, 223, 142, 24, 243, 112, 10, 146, 56, 253, 73, 22, 184, 60, 150, 108, 191, 50, 187, 226, 157, 83, 116, 160, 123, 67, 60, 208, 238, 142, 104, 81, 147, 26, 126, 23, 96, 31, 107, 102, 2, 170, 3, 49, 219, 155, 8, 26, 172, 96, 45, 149, 23, 108, 23, 103, 184, 130, 145, 85, 252, 245, 55, 28, 214, 64, 109, 126, 36, 89, 185, 240, 2, 159, 192, 97, 74, 172, 207, 218, 213, 6, 30, 244, 94, 113, 65, 240, 48, 83, 187, 208, 23, 177, 72, 184, 138, 239, 227, 168, 148, 141, 1, 156, 43, 171, 212, 115, 73, 89, 122, 147, 24, 79, 139, 213, 48, 70, 21, 58, 64, 9, 20, 154, 73, 127, 11, 17, 161, 94, 62, 165, 7, 66, 243, 165, 18, 230, 39, 235, 35, 181, 114, 141, 110, 218, 211, 113, 110, 122, 18, 152, 254, 187, 188, 47, 32, 53, 92, 173, 146, 58, 122, 115, 196, 244, 212, 53, 144, 117, 10, 21, 201, 31, 203, 213, 144, 147, 71, 182, 157, 210, 191, 11, 129, 220, 255, 254, 169, 181, 223, 161, 187, 90, 48, 165, 240, 121, 6, 0, 0, 0, 0, 0, 0, 0, 2, 79, 234, 180, 73, 246, 24, 226, 13, 83, 45, 181, 142, 114, 84, 205, 9, 216, 57, 28, 232, 108, 16, 247, 194, 106, 87, 232, 114, 139, 30, 254, 65, 64, 227, 70, 34, 235, 120, 69, 195, 92, 236, 201, 41, 25, 0, 25, 20, 45, 246, 33, 222, 189, 90, 74, 19, 43, 132, 222, 158, 199, 71, 196, 24, 57, 117, 93, 63, 139, 188, 228, 139, 232, 65, 160, 7, 190, 132, 157, 14, 225, 96, 130, 147, 232, 24, 214, 54, 166, 13, 140, 3, 166, 93, 200, 0, 23, 201, 199, 108, 95, 78, 116, 23, 17, 211, 253, 172, 62, 212, 18, 143, 232, 230, 149, 220, 102, 114, 114, 117, 81, 115, 42, 56, 226, 242, 60, 150, 247, 42, 63, 92, 60, 245, 188, 252, 235, 146, 57, 119, 186, 154, 51, 13, 65, 156, 21, 63, 142, 64, 189, 158, 189, 25, 249, 238, 245, 179, 217, 174, 35, 63, 13, 248, 153, 151, 198, 116, 169, 24, 147, 89, 59, 136, 184, 14, 208, 89, 90, 246, 94, 238, 235, 242, 195, 160, 178, 172, 26, 14, 225, 22, 96, 200, 42, 46, 126, 226, 48, 145, 44, 182, 249, 210, 56, 233, 66, 233, 40, 111, 233, 3, 203, 24, 38, 12, 160, 125, 64, 74, 224, 47, 144, 18, 239, 124, 93, 32, 78, 81, 142, 88, 52, 206, 80, 225, 23, 76, 40, 15, 170, 28, 147, 6, 183, 89, 113, 49, 140, 237, 107, 173, 123, 187, 89, 164, 141, 1, 77, 4, 104, 117, 5, 98, 97, 140, 4, 189, 97, 137, 114, 74, 127, 158, 109, 54, 226, 23, 240, 138, 112, 141, 3, 72, 175, 160, 132, 19, 4, 121, 158, 234, 157, 55, 62, 218, 218, 219, 194, 85, 35, 0, 68, 98, 70, 104, 122, 105, 73, 86, 126, 226, 4, 49, 16, 61, 246, 100, 21, 130, 239, 163, 208, 147, 9, 230, 162, 63, 29, 142, 144, 22, 107, 49, 145, 2, 143, 142, 170, 156, 182, 226, 68, 114, 229, 80, 200, 109, 45, 76, 178, 14, 226, 35, 9, 232, 24, 139, 187, 79, 155, 20, 153, 209, 65, 42, 15, 62, 120, 107, 108, 71, 204, 21, 141, 37, 70, 63, 201, 251, 147, 28, 50, 13, 74, 67, 100, 93, 233, 93, 164, 217, 111, 132, 173, 125, 148, 19, 188, 192, 12, 245, 129, 161, 194, 233, 128, 242, 104, 29, 28, 87, 172, 221, 248, 198, 109, 48, 102, 129, 161, 76, 182, 160, 157, 6, 21, 205, 207, 131, 80, 0, 127, 1, 44, 223, 40, 142, 149, 182, 213, 204, 73, 93, 141, 38, 119, 136, 190, 150, 38, 99, 218, 233, 179, 128, 13, 191, 247, 14, 67, 238, 84, 156, 226, 187, 255, 112, 64, 30, 249, 163, 149, 156, 7, 142, 89, 13, 173, 17, 197, 68, 61, 0, 48, 140, 97, 176, 188, 179, 233, 63, 64, 150, 180, 132, 67, 215, 175, 153, 34, 247, 204, 176, 191, 252, 191, 178, 82, 211, 175, 111, 105, 157, 124, 214, 80, 245, 65, 203, 50, 75, 130, 210, 1, 95, 199, 20, 67, 6, 69, 136, 116, 248, 222, 229, 239, 114, 218, 8, 17, 18, 189, 149, 109, 28, 104, 42, 137, 197, 235, 247, 200, 187, 39, 45, 193, 164, 48, 239, 57, 155, 29, 20, 177, 202, 68, 250, 156, 2, 161, 168, 104, 159, 160, ];
-
+	pub const VERIFYING_KEY: &[u8] = &[0, 127, 221, 202, 42, 0, 118, 167, 226, 12, 191, 102, 156, 84, 202, 68, 129, 168, 246, 9, 170, 171, 79, 255, 84, 169, 48, 206, 73, 18, 9, 24, 202, 146, 127, 215, 74, 64, 163, 183, 121, 114, 178, 249, 138, 89, 164, 46, 2, 5, 96, 51, 115, 4, 62, 212, 208, 208, 54, 9, 26, 171, 113, 114, 175, 57, 213, 23, 140, 249, 71, 164, 105, 215, 110, 199, 235, 72, 244, 91, 103, 99, 166, 247, 24, 169, 3, 138, 180, 230, 255, 215, 48, 191, 17, 94, 8, 195, 236, 134, 248, 127, 19, 137, 218, 224, 210, 229, 41, 48, 208, 121, 84, 222, 0, 51, 106, 92, 6, 24, 182, 140, 143, 151, 178, 88, 99, 240, 93, 35, 35, 32, 9, 198, 93, 94, 247, 248, 131, 248, 27, 65, 203, 244, 7, 154, 0, 150, 99, 64, 86, 72, 61, 73, 56, 226, 56, 152, 114, 37, 123, 206, 243, 90, 55, 248, 87, 138, 199, 244, 74, 48, 90, 238, 254, 139, 92, 72, 224, 31, 243, 169, 169, 231, 229, 203, 34, 243, 88, 54, 233, 124, 24, 59, 143, 129, 24, 246, 92, 125, 45, 44, 237, 250, 42, 159, 2, 221, 176, 81, 200, 127, 56, 217, 4, 51, 14, 93, 8, 240, 12, 93, 59, 152, 89, 66, 108, 206, 245, 36, 73, 233, 50, 70, 198, 201, 138, 199, 113, 144, 21, 50, 246, 181, 6, 78, 191, 220, 31, 56, 254, 194, 224, 161, 197, 66, 93, 192, 64, 53, 79, 151, 169, 112, 218, 63, 182, 196, 227, 125, 237, 38, 156, 109, 122, 253, 152, 243, 165, 141, 211, 136, 196, 68, 20, 82, 53, 115, 10, 219, 2, 176, 248, 21, 174, 50, 113, 218, 129, 146, 161, 252, 26, 34, 226, 102, 42, 4, 254, 11, 176, 154, 43, 250, 116, 249, 140, 199, 180, 84, 137, 122, 139, 223, 173, 162, 102, 114, 228, 226, 222, 184, 70, 138, 68, 22, 4, 67, 21, 104, 104, 72, 63, 141, 44, 196, 208, 104, 94, 27, 251, 22, 104, 232, 137, 57, 102, 78, 202, 227, 236, 166, 21, 185, 8, 94, 64, 193, 157, 97, 142, 156, 242, 179, 40, 193, 66, 58, 228, 6, 64, 38, 43, 156, 12, 140, 24, 162, 99, 83, 159, 73, 251, 175, 76, 210, 41, 48, 97, 88, 127, 246, 176, 83, 63, 17, 172, 45, 128, 123, 224, 255, 28, 252, 210, 16, 74, 105, 186, 108, 14, 179, 235, 130, 92, 164, 128, 120, 80, 221, 71, 227, 1, 246, 87, 224, 137, 218, 57, 99, 254, 38, 225, 160, 10, 175, 180, 153, 213, 7, 147, 83, 83, 132, 11, 43, 202, 255, 66, 81, 47, 91, 89, 187, 107, 61, 166, 72, 33, 187, 205, 204, 171, 153, 247, 194, 20, 83, 24, 145, 9, 9, 23, 39, 19, 139, 89, 121, 129, 57, 194, 200, 171, 17, 201, 174, 148, 196, 183, 46, 176, 197, 243, 124, 89, 177, 95, 207, 129, 186, 36, 132, 245, 88, 143, 226, 9, 206, 63, 126, 18, 95, 167, 11, 39, 183, 64, 229, 0, 118, 248, 243, 246, 150, 130, 88, 140, 44, 144, 171, 164, 85, 223, 81, 101, 188, 100, 166, 169, 134, 59, 135, 197, 204, 38, 173, 161, 165, 159, 136, 43, 207, 130, 220, 225, 154, 180, 56, 71, 139, 192, 57, 23, 188, 123, 56, 0, 116, 188, 52, 130, 122, 92, 101, 137, 150, 85, 210, 177, 105, 169, 199, 65, 47, 234, 140, 92, 70, 130, 128, 137, 2, 126, 26, 138, 238, 119, 193, 37, 202, 206, 130, 140, 211, 114, 12, 90, 120, 130, 10, 77, 86, 89, 106, 9, 4, 23, 143, 233, 182, 52, 57, 124, 113, 206, 197, 216, 153, 156, 29, 77, 22, 240, 233, 176, 84, 116, 139, 28, 240, 120, 70, 108, 146, 73, 187, 212, 224, 22, 23, 155, 236, 67, 92, 208, 27, 15, 39, 249, 36, 199, 78, 6, 0, 0, 0, 0, 0, 0, 0, 12, 209, 110, 37, 232, 24, 241, 195, 22, 163, 163, 148, 111, 8, 207, 239, 208, 176, 148, 67, 211, 83, 210, 206, 31, 49, 207, 108, 251, 110, 148, 93, 112, 99, 241, 51, 99, 89, 155, 87, 139, 220, 128, 109, 47, 248, 78, 110, 22, 145, 197, 63, 96, 132, 86, 1, 107, 128, 162, 240, 19, 38, 11, 117, 146, 38, 248, 165, 97, 234, 116, 76, 209, 209, 231, 94, 160, 30, 108, 44, 58, 112, 148, 31, 101, 255, 178, 147, 4, 67, 152, 37, 170, 189, 113, 252, 25, 30, 223, 174, 220, 82, 97, 84, 46, 214, 55, 156, 103, 187, 10, 251, 245, 73, 142, 7, 144, 75, 214, 21, 17, 115, 132, 78, 109, 100, 20, 60, 91, 21, 73, 129, 104, 11, 23, 5, 105, 18, 234, 3, 18, 251, 53, 40, 12, 106, 182, 244, 59, 244, 138, 251, 240, 61, 115, 60, 175, 40, 34, 150, 103, 153, 143, 184, 61, 164, 190, 154, 230, 177, 159, 213, 254, 28, 180, 184, 96, 137, 230, 4, 128, 101, 80, 108, 56, 53, 155, 172, 81, 222, 173, 69, 10, 74, 162, 6, 109, 70, 175, 49, 222, 46, 18, 44, 170, 243, 128, 158, 0, 189, 91, 207, 225, 232, 105, 208, 149, 216, 188, 17, 177, 222, 168, 115, 93, 186, 243, 164, 213, 24, 151, 63, 13, 185, 43, 0, 166, 109, 185, 223, 8, 136, 89, 159, 7, 32, 32, 180, 167, 240, 136, 41, 150, 251, 220, 210, 74, 219, 0, 162, 33, 229, 145, 46, 183, 89, 209, 63, 234, 164, 43, 252, 112, 56, 76, 52, 136, 209, 40, 150, 4, 181, 227, 253, 234, 122, 66, 150, 10, 203, 28, 192, 59, 84, 80, 51, 37, 211, 210, 64, 58, 191, 73, 227, 8, 44, 9, 19, 211, 146, 68, 247, 112, 171, 18, 22, 69, 241, 109, 208, 90, 246, 211, 108, 139, 167, 218, 106, 113, 244, 213, 63, 77, 211, 34, 197, 7, 161, 98, 35, 152, 31, 47, 194, 222, 15, 51, 233, 8, 42, 9, 39, 140, 154, 135, 55, 169, 3, 107, 174, 77, 183, 134, 227, 249, 220, 33, 91, 3, 156, 9, 116, 91, 50, 228, 249, 17, 98, 53, 215, 250, 131, 171, 186, 2, 193, 97, 186, 119, 75, 113, 162, 230, 250, 6, 247, 132, 254, 34, 48, 14, 216, 193, 127, 76, 123, 153, 232, 94, 36, 0, 85, 162, 33, 8, 69, 216, 124, 116, 172, 29, 32, 134, 248, 25, 53, 114, 103, 28, 195, 134, 254, 3, 110, 191, 91, 223, 91, 166, 193, 171, 48, 52, 69, 138, 225, 18, 242, 180, 127, 71, 249, 126, 55, 33, 5, 219, 190, 214, 12, 158, 80, 161, 177, 215, 57, 72, 55, 45, 18, 214, 146, 52, 25, 92, 231, 2, 81, 148, 76, 13, 190, 103, 84, 136, 27, 82, 214, 164, 217, 70, 183, 170, 7, 156, 118, 41, 104, 221, 246, 164, 197, 219, 144, 30, 16, 174, 131, 158, 147, 94, 183, 90, 147, 120, 23, 248, 53, 148, 248, 106, 35, 110, 202, 92, 190, 216, 202, 5, 148, 111, 81, 141, 132, 24, 53, 80, 17, 133, 197, 81, 253, 162, 154, 166, 61, 200, 247, 20, 134, 17, 52, 36, 66, 213, 52, 184, 217, 141, 242, 12, 185, 193, 113, 10, 27, 219, 58, 68, 67, 221, 234, 143, 210, 65, 243, ];
 
 	// --- Storage ---
 	#[pallet::storage]
@@ -61,7 +58,6 @@ pub mod pallet {
 	// --- Config ---
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		#[pallet::constant]
 		type TreeDepth: Get<u8>;
 		#[pallet::constant]
@@ -70,8 +66,10 @@ pub mod pallet {
     
 		// New: The balance type used for fees
 		type Balance: Parameter + Member + Copy + MaybeSerializeDeserialize +
-			MaxEncodedLen + AtLeast32BitUnsigned + Default;
-	}
+			MaxEncodedLen + AtLeast32BitUnsigned + Default + CheckedSub;
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
+		}
 
 	// --- Events ---
 	#[pallet::event]
@@ -97,6 +95,7 @@ pub mod pallet {
 		InvalidRelayer, // New: The caller is not a registered relayer.
 		FeeTooLow,      // New: The relayer fee specified is insufficient.
 		FeeTransferFailed,
+		BalanceConversionError,
 	}
 	
 
@@ -154,25 +153,75 @@ pub mod pallet {
 			merkle_root: T::Hash,
 			nullifiers: [T::Hash; 2],
 			output_commitments: [T::Hash; 2],
-			// New Parameters for Relayer Logic:
-			relayer_address: T::AccountId, // The account that submitted the transaction (and gets the fee)
-			recipient_address: T::AccountId, // The final destination of the unshielded funds
-			fee: T::Balance, // The fee amount paid by the sender (must be >= minimum required)
+			// ZK Confirmed amount
+			withdrawal_amount_h256: T::Hash, 
+			relayer_address: T::AccountId, 
+			recipient_address: T::AccountId, 
+			fee: T::Balance, 
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// PLACEHOLDER LOGIC: Check if the submitter (who) is a registered relayer.
-			// In a real system, the submitter (who) is the relayer_address, and we check if 'who' is registered.
 			ensure!(Self::is_relayer_registered(&who), Error::<T>::InvalidRelayer);
-
-			// Placeholder: Check if fee is sufficient (assuming minimum required fee is 100 for now)
-			let min_fee: T::Balance = 100u32.into();
+			let min_fee: T::Balance = 100u32.into(); 
 			ensure!(fee >= min_fee, Error::<T>::FeeTooLow);
 			
-			// Placeholder: Verification and fund distribution logic will go here later.
-			// We expect verification to pass and funds to be moved/created here.
+			// 1. --- Verification Step (Placeholder) ---
+			let public_inputs = vec![
+				merkle_root,
+				nullifiers[0],
+				nullifiers[1],
+				output_commitments[0],
+				output_commitments[1],
+				withdrawal_amount_h256, // Add new public input
+			];
+			
+			let public_inputs_fr: Vec<Fr> = public_inputs
+				.iter()
+				.map(|hash| Fr::from_le_bytes_mod_order(hash.as_ref()))
+				.collect();
 
-			// Success Metric: Just compile for now.
+			Self::verify_proof(public_inputs_fr, proof_bytes)?; // ZK proof verification (for later)
+
+			// 2. --- Currency Transfer Logic (The Atomic Fee Market) ---
+			
+			// Convert ZK amount (Fr/H256) to Pallet Balance type
+			let withdrawal_amount_fr = Fr::from_le_bytes_mod_order(withdrawal_amount_h256.as_ref());
+			let total_withdrawal: T::Balance = Self::fr_to_balance(withdrawal_amount_fr)
+				.ok_or(Error::<T>::BalanceConversionError)?;
+
+			// Calculate net amount for recipient (Atomicity built into DispatchResult)
+			let net_recipient_amount = total_withdrawal.checked_sub(&fee)
+				.ok_or(Error::<T>::FeeTransferFailed)?; 
+
+			// Get the Pallet's AccountId (The Shielded Fund Pool)
+			// FIX: Use the AccountIdConversion trait
+			let pallet_account: T::AccountId = T::PalletId::get().into_account_truncating();
+
+			// Transfer net amount to recipient
+			T::Currency::transfer(
+				&pallet_account, 
+				&recipient_address,
+				net_recipient_amount,
+				// FIX: Use the correct enum variant
+				ExistenceRequirement::KeepAlive, 
+			).map_err(|_| Error::<T>::FeeTransferFailed)?;
+
+			// Transfer fee to relayer
+			T::Currency::transfer(
+				&pallet_account, 
+				&who, // Relayer is the transaction signer
+				fee,
+				// FIX: Use the correct enum variant
+				ExistenceRequirement::KeepAlive,
+			).map_err(|_| Error::<T>::FeeTransferFailed)?;
+
+			// 3. --- State Updates ---
+			
+			Nullifiers::<T>::insert(nullifiers[0], ());
+			Nullifiers::<T>::insert(nullifiers[1], ());
+			Self::insert_leaf(who.clone(), output_commitments[0])?;
+			Self::insert_leaf(who.clone(), output_commitments[1])?;
+
 			Self::deposit_event(Event::WithdrawalSuccessful {
 				recipient: recipient_address,
 				relayer: who,
@@ -182,12 +231,11 @@ pub mod pallet {
 			Ok(())
 		}
 	}
-
-	// --- Internal Logic ---
-	impl<T: Config> Pallet<T> {
+		
+	
 		// --- Runtime Poseidon Hashing Logic ---
 		// --- Helper Functions for Tests ---
-
+	impl<T: Config> Pallet<T> {
 // Function to get PoseidonConfig using hardcoded parameters
 fn get_poseidon_params() -> PoseidonConfig<Fr> {
     let full_rounds = 8;
@@ -447,7 +495,21 @@ fn get_poseidon_params() -> PoseidonConfig<Fr> {
             Ok(())
         }
 
+		// NEW: Utility to convert Fr field element (used for value in ZK proof) to T::Balance
+		pub fn fr_to_balance(fr: Fr) -> Option<T::Balance> {
+			let big_int = fr.into_bigint(); // This is a BigInt<4>, which is a [u64; 4]
 
+			// A T::Balance (u64 in mock) can only be represented by the first 64-bit limb.
+			// We must check if any of the higher limbs (indices 1, 2, 3) are non-zero.
+			// If they are, the number is too large to fit in T::Balance.
+			if big_int.0[1] != 0 || big_int.0[2] != 0 || big_int.0[3] != 0 {
+				return None; // Value is too large
+			}
+
+			// If only the first limb is used, we can convert it.
+			// We use try_from to safely convert the u64 limb to T::Balance.
+			T::Balance::try_from(big_int.0[0]).ok()
+		}
 		// --- ZK Proof Verification Logic ---
 		pub fn verify_proof(public_inputs: Vec<Fr>, proof_bytes: Vec<u8>) -> DispatchResult {
 			let vk = VerifyingKey::<Bls12_381>::deserialize_uncompressed(&VERIFYING_KEY[..])
@@ -462,9 +524,9 @@ fn get_poseidon_params() -> PoseidonConfig<Fr> {
 			ensure!(is_valid, Error::<T>::InvalidProof);
 			Ok(())
 		}
-	} // *** END OF impl<T: Config> Pallet<T> ***
+	 // *** END OF impl<T: Config> Pallet<T> ***
 } // *** END OF mod pallet ***
-
+}	
 // --- Module stubs for tests ---
 #[cfg(test)]
 mod mock;

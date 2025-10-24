@@ -9,6 +9,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use frame_support::PalletId;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 // FIX: Mock Balance type, needed for the new Balance generic constraint
@@ -78,15 +79,16 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub const TreeDepth: u8 = 2;
 	pub const DefaultLeafHash: H256 = H256([0; 32]);
+	pub const ChrysalisPalletId: PalletId = PalletId(*b"py/chrys");
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type TreeDepth = TreeDepth;
 	type DefaultLeafHash = DefaultLeafHash;
 	// FIX: Implement Currency and Balance for the Pallet Config
 	type Currency = Balances; 
 	type Balance = Balance; 
+	type PalletId=ChrysalisPalletId;
 }
 
 // Build genesis storage according to the mock runtime.

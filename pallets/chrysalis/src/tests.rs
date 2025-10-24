@@ -1,7 +1,7 @@
-use crate::{mock::*, MerkleTree, Nullifiers, Pallet,Error}; // Removed unused Error
+use crate::{mock::*, MerkleTree, Nullifiers, Pallet,Error,Event,Relayers}; // Removed unused Error
 // Removed unused Note, PrivateTransferCircuit
-use frame_support::{assert_err, assert_ok}; // Added assert_err
-
+use frame_support::{assert_err, assert_ok,PalletId}; // Added assert_err
+use frame_support::traits::fungible::Mutate;
 // --- Arkworks v0.4.0 Imports ---
 use ark_bls12_381::Fr;
 // Only need BigInteger, PrimeField for fr_str_to_h256 helper
@@ -15,10 +15,12 @@ use ark_sponge::{poseidon::{PoseidonConfig, PoseidonSponge}, CryptographicSponge
 use sp_core::H256;
 use std::str::FromStr;
 use hex; // Keep hex
-
+use sp_runtime::traits::AccountIdConversion; // Required for PalletId conversion
+use pallet_balances::Pallet as Balances; // To access Balances pallet directly
 // *** ADD THESE FOR LOADING DATA ***
 use std::fs;
 use serde::Deserialize;
+
 // **********************************
 
 
@@ -195,6 +197,10 @@ fn setup_poseidon_params() -> PoseidonConfig<Fr> {
 
     PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, ark, rate, capacity)
 }
+fn set_balance(who: u64, amount: u64) {
+    // FIX: The Mutate trait's set_balance takes (&who, amount)
+    Balances::<Test>::set_balance(&who, amount);
+}
 // Keep hash_fr if other tests need it
 fn hash_fr(params: &PoseidonConfig<Fr>, a: Fr, b: Fr) -> Fr {
 	// FIX: Use CryptographicSponge trait for ::new
@@ -237,7 +243,17 @@ fn fr_str_to_h256(fr_str: &str) -> H256 {
 // ***************************************
 
 #[test]
-fn deposit_should_work() { /* ... keep as is ... */ }
+fn deposit_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Pallet::<Test>::next_leaf_index(), 0);
+		assert_eq!(Pallet::<Test>::merkle_root(), DefaultLeafHash::get());
+		let commitment1 = H256::from([1; 32]);
+		assert_ok!(Pallet::<Test>::deposit(RuntimeOrigin::signed(1), commitment1));
+		assert_eq!(MerkleTree::<Test>::get(0), Some(commitment1));
+		assert_eq!(Pallet::<Test>::next_leaf_index(), 1);
+		assert_ne!(Pallet::<Test>::merkle_root(), DefaultLeafHash::get());
+	});
+}
 
 #[test]
 fn transfer_with_used_nullifier_should_fail() {
@@ -256,13 +272,39 @@ fn transfer_with_used_nullifier_should_fail() {
 	});
 }
 
-#[test]
-fn end_to_end_transfer_should_succeed() {
-	if crate::pallet::VERIFYING_KEY.is_empty() {
-		panic!("VERIFYING_KEY must not be empty in lib.rs.");
-	}
 
-	new_test_ext().execute_with(|| {
+#[test]
+fn unshield_should_transfer_balance_and_pay_relayer() {
+    new_test_ext().execute_with(|| {
+        // --- Setup Accounts and Balances ---
+        let relayer_id: u64 = 5;
+        let recipient_id: u64 = 6;
+        let pallet_account = ChrysalisPalletId::get().into_account_truncating();
+
+        // Give Pallet Account (the pool) enough funds to cover withdrawal + fee
+        set_balance(pallet_account, 500);
+
+        // Register relayer (Required by the extrinsic check)
+        Relayers::<Test>::insert(relayer_id, true);
+
+        // Define Inputs
+        let withdrawal_amount: u64 = 250;
+        let fee_amount: u64 = 100;
+        let net_recipient_amount = 150;
+
+        let withdrawal_amount_h256 = {
+            let fr = Fr::from(withdrawal_amount);
+            let mut bytes = [0u8; 32];
+            let fr_vec = fr.into_bigint().to_bytes_le();
+            bytes[..fr_vec.len()].copy_from_slice(&fr_vec);
+            H256::from(bytes)
+        };
+
+        // ✅ Set block number BEFORE dispatching extrinsic
+        System::set_block_number(1);
+
+        // --- Execute Unshield ---
+        // --- Load Pre-generated Data ---
         println!("Loading pre-generated test data...");
         let proof_bytes = fs::read("src/testdata/test_proof.bin")
             .expect("Failed to read test_proof.bin. Did you run generate_test_data and copy the files?");
@@ -272,6 +314,7 @@ fn end_to_end_transfer_should_succeed() {
             .expect("Failed to parse test_pub_inputs.json.");
         println!("Test data loaded.");
 
+        // --- Convert Loaded Data ---
         let commitment1_h256 = fr_str_to_h256(&pub_inputs_data.commitment1);
         let commitment2_h256 = fr_str_to_h256(&pub_inputs_data.commitment2);
         let merkle_root_h256 = fr_str_to_h256(&pub_inputs_data.merkle_root);
@@ -283,35 +326,44 @@ fn end_to_end_transfer_should_succeed() {
             fr_str_to_h256(&pub_inputs_data.output_commitments[0]),
             fr_str_to_h256(&pub_inputs_data.output_commitments[1]),
         ];
-        println!("Converted public inputs to H256.");
-
+        
+        // --- Setup On-Chain State ---
+        // Deposit the *exact* commitments used to generate the proof/root
 		println!("Depositing initial commitments...");
 		assert_ok!(Pallet::<Test>::deposit(RuntimeOrigin::signed(1), commitment1_h256));
 		assert_ok!(Pallet::<Test>::deposit(RuntimeOrigin::signed(1), commitment2_h256));
         println!("Deposits complete.");
 
+        // Verify the on-chain root matches the loaded root
         let on_chain_root = Pallet::<Test>::merkle_root();
         println!("On-chain root after deposits: {:?}", on_chain_root);
         println!("Loaded root from file:      {:?}", merkle_root_h256);
         assert_eq!(on_chain_root, merkle_root_h256, "On-chain root does not match the pre-calculated root!");
         println!("On-chain root matches pre-calculated root.");
 
-        println!("Calling transfer extrinsic...");
-		assert_ok!(Pallet::<Test>::transfer(
-			RuntimeOrigin::signed(1),
-			proof_bytes,
-			merkle_root_h256,
-			nullifiers_h256,
-			output_commitments_h256,
-		));
-        println!("Transfer extrinsic successful.");
+        // --- Execute Unshield ---
+        assert_ok!(Pallet::<Test>::unshield(
+            RuntimeOrigin::signed(relayer_id),
+            proof_bytes,                // Use loaded proof
+            merkle_root_h256,           // Use loaded root
+            nullifiers_h256,            // Use loaded nullifiers
+            output_commitments_h256,    // Use loaded outputs
+            withdrawal_amount_h256,     // The withdrawal amount
+            relayer_id,                 // relayer_address
+            recipient_id,               // recipient_address
+            fee_amount,                 // fee
+        ));
 
-		assert_eq!(Pallet::<Test>::next_leaf_index(), 4, "Next leaf index should be 4");
-		assert!(Nullifiers::<Test>::contains_key(nullifiers_h256[0]), "Nullifier 0 not marked as used");
-		assert!(Nullifiers::<Test>::contains_key(nullifiers_h256[1]), "Nullifier 1 not marked as used");
-		assert_eq!(MerkleTree::<Test>::get(2), Some(output_commitments_h256[0]), "Output commitment 0 mismatch");
-		assert_eq!(MerkleTree::<Test>::get(3), Some(output_commitments_h256[1]), "Output commitment 1 mismatch");
-		assert_ne!(Pallet::<Test>::merkle_root(), on_chain_root, "Merkle root should have changed after transfer");
-        println!("Post-conditions verified.");
-	});
+        // --- Assert Balances ---
+        assert_eq!(Balances::<Test>::free_balance(relayer_id), fee_amount);
+        assert_eq!(Balances::<Test>::free_balance(recipient_id), net_recipient_amount);
+        assert_eq!(Balances::<Test>::free_balance(pallet_account), 500 - withdrawal_amount);
+
+        // --- Assert Event ---
+        System::assert_last_event(RuntimeEvent::Chrysalis(Event::WithdrawalSuccessful {
+            recipient: recipient_id,
+            relayer: relayer_id,
+            fee: fee_amount,
+        }));
+    });
 }
