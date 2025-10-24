@@ -1,0 +1,87 @@
+[package]
+name = "pallet-chrysalis"
+version = "0.1.0"
+description = "Pallet for private transfers using ZK-SNARKs."
+authors = ["Sairam"]
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# --- Substrate Dependencies (Aligned to project root) ---
+codec = { package = "parity-scale-codec", version = "3.6.5", default-features = false, features = ["derive"] }
+scale-info = { version = "2.11.2", default-features = false, features = ["derive"] }
+
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+sp-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+sp-core = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# --- Arkworks (for verifier logic) ---
+ark-bls12-381 = { version = "0.4.0", default-features = false }
+ark-groth16 = { version = "0.4.0", default-features = false, features = ["r1cs"] }
+ark-snark = { version = "0.4.0", default-features = false }
+ark-serialize = { version = "0.4.0", default-features = false }
+ark-ff = { version = "0.4.0", default-features = false }
+ark-ec = { version = "0.4.0", default-features = false }
+ark-sponge = { version = "0.4.0-alpha", default-features = false}
+ark-r1cs-std = { version = "0.4.0", default-features = false }
+# ... your other dependencies like ark-ff, ark-groth16, etc.
+ark-crypto-primitives = { version = "0.4.0", default-features = false, features = ["sponge"] }
+hex = { version = "0.4", default-features = false }
+[dev-dependencies]
+# --- Substrate test utils (Aligned to project root) ---
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+sp-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+sp-core = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2509" }
+hex = { version = "0.4"}
+# --- Your circuit for generating proofs in tests ---
+chrysalis-circuit = { path = "../../chrysalis-circuit" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# --- Arkworks test utils ---
+ark-bls12-381 = { version = "0.4.0" }
+ark-groth16 = { version = "0.4.0", features = ["r1cs"] }
+ark-snark = { version = "0.4.0" }
+ark-serialize = { version = "0.4.0" }
+ark-ff = { version = "0.4.0" }
+ark-ec = { version = "0.4.0" }
+ark-sponge = { version = "0.4.0-alpha", default-features = false }
+ark-std = { version = "0.4.0", default-features = false }
+ark-relations = { version = "0.4.0" }
+tracing-subscriber = { version = "0.2.25" }
+tracing = { version = "0.1" }
+ark-r1cs-std = { version = "0.4.0", default-features = false }
+rand = "0.8"
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-api/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"ark-bls12-381/std",
+	"ark-groth16/std",
+	"ark-serialize/std",
+	"ark-ff/std",
+	"ark-ec/std",
+    "ark-sponge/std",
+    "ark-std/std",
+]
+try-runtime = ["frame-support/try-runtime"]

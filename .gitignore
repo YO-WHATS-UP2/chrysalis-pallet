@@ -1,0 +1,38 @@
+# Rust / Cargo
+# Ignore all build artifacts
+/target/
+**/target/
+# Cargo.lock
+
+# Substrate
+/node/target/
+/runtime/target/
+/target/
+/pkg/
+*.wasm
+*.compact.wasm
+*.header
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs & Environment
+*.log
+.env
+
+# Your Custom Tool Artifacts
+# Ignore the build directory for the test data generator
+/tools/generate_test_data/target/
+# Ignore the generated keys file (these are sensitive)
+/tools/generate_test_data/keys_output.txt
+
+# IMPORTANT: We *want* to commit the test data itself,
+# so we explicitly DON'T ignore the 'testdata' directory.
+# If a more general rule ignores them, we'd force-add them.

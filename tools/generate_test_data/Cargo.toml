@@ -1,0 +1,26 @@
+[workspace]
+[package]
+name = "generate-test-data"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# --- Arkworks ---
+ark-bls12-381 = "0.4.0"
+ark-ff = { version = "0.4.2" }
+ark-groth16 = { version = "0.4.0", features = ["r1cs"] }
+ark-snark = "0.4.0"
+ark-serialize = "0.4.2"
+ark-sponge = "0.4.0-alpha" # Make sure version matches your pallet
+ark-crypto-primitives = { version = "0.4.0", features = ["sponge"] }
+ark-std = { version = "0.4.0"} # Need rand feature
+
+# --- Your Circuit ---
+# Adjust path as needed
+chrysalis-circuit = { path = "../../chrysalis-circuit" }
+
+# --- Other Utils ---
+hex = "0.4"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0" # For saving public inputs easily

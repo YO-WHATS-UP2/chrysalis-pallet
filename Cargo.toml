@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+	
+    "chrysalis-circuit",
+    "pallets/chrysalis",
+]
+
+[profile.release]
+panic = "unwind"
+
+# This patch section is the single source of truth for all Substrate dependencies.
+# It uses a known-good git revision that is guaranteed to be stable.
+[patch.crates-io]
+frame-executive = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+frame-benchmarking = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+pallet-sudo = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+pallet-transaction-payment = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-api = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-block-builder = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-core = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-session = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-transaction-pool = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-version = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
+sp-api-proc-macro = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2509" }
