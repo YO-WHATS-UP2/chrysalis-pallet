@@ -4,6 +4,8 @@ members = [
 	
     "chrysalis-circuit",
     "pallets/chrysalis",
+    "tools/generate_test_data", # Add your tool
+    "bin/node-template/node",
 ]
 
 [profile.release]

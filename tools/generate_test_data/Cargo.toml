@@ -1,4 +1,4 @@
-[workspace]
+
 [package]
 name = "generate-test-data"
 version = "0.1.0"

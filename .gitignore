@@ -13,6 +13,9 @@
 *.compact.wasm
 *.header
 
+/tools/relayer/node_modules
+/tools/relayer/*.log
+
 # IDE & Editor
 .vscode/
 .idea/
